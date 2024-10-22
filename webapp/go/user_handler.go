@@ -96,16 +96,16 @@ func getIconHandler(c echo.Context) error {
 	// }
 	// defer tx.Rollback()
 
-	var user UserModel
-	if err := dbConn.GetContext(ctx, &user, "SELECT * FROM users WHERE name = ?", username); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusNotFound, "not found user that has the given username")
-		}
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
-	}
+	// var user UserModel
+	// if err := dbConn.GetContext(ctx, &user, "SELECT * FROM users WHERE name = ?", username); err != nil {
+	// 	if errors.Is(err, sql.ErrNoRows) {
+	// 		return echo.NewHTTPError(http.StatusNotFound, "not found user that has the given username")
+	// 	}
+	// 	return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
+	// }
 
 	var image []byte
-	if err := dbConn.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", user.ID); err != nil {
+	if err := dbConn.GetContext(ctx, &image, " SELECT image FROM icons INNER JOIN users ON icons.user_id = users.id WHERE users.name = ?", username); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return c.File(fallbackImage)
 		} else {
