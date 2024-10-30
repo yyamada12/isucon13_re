@@ -207,12 +207,42 @@ func (sm *SyncCounterMap[K, V]) Clear() {
 	sm.m = map[K]V{}
 }
 
+type SyncListMap[K comparable, V any] struct {
+	m  map[K][]V
+	mu sync.RWMutex
+}
+
+func NewSyncListMap[K comparable, V any]() *SyncListMap[K, V] {
+	return &SyncListMap[K, V]{m: map[K][]V{}}
+}
+
+func (sm *SyncListMap[K, V]) Add(key K, value V) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.m[key] = append(sm.m[key], value)
+}
+
+func (sm *SyncListMap[K, V]) Get(key K) []V {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return sm.m[key]
+}
+
+func (sm *SyncListMap[K, V]) Clear() {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.m = map[K][]V{}
+}
+
 var iconUsernameMap = NewSyncMap[string, []byte]()
 var iconUserMap = NewSyncMap[int64, []byte]()
 var themeMap = NewSyncMap[int64, ThemeModel]()
 var userMap = NewSyncMap[int64, UserModel]()
+var tagMap = NewSyncMap[int64, Tag]()
 
 var livestreamMap = NewSyncMap[int64, LivestreamModel]()
+
+var liveTagsMap = NewSyncListMap[int64, Tag]()
 
 var userTotalReactionsMap = NewSyncCounterMap[int64, int64]()
 
@@ -222,6 +252,8 @@ func LoadCache() {
 	LoadLivestreamFromDB()
 	LoadThemeFromDB()
 	LoadUserFromDB()
+	LoadLivecommentsFromDB()
+	LoadTagFromDB()
 }
 
 func LoadIconFromDB() {
@@ -306,6 +338,42 @@ func LoadUserFromDB() {
 	for _, row := range rows {
 		// add to sync map
 		userMap.Add(row.ID, *row)
+	}
+}
+
+func LoadLivecommentsFromDB() {
+	// clear sync map
+	liveTagsMap.Clear()
+
+	type LivestreamTag struct {
+		LivestreamID int64  `db:"livestream_id"`
+		TagID        int64  `db:"tag_id"`
+		TagName      string `db:"tag_name"`
+	}
+
+	var rows []*LivestreamTag
+	if err := dbConn.Select(&rows, `SELECT l.livestream_id as livestream_id, l.tag_id as tag_id, t.name as tag_name FROM livestream_tags l LEFT JOIN tags t ON l.tag_id = t.id`); err != nil {
+		log.Fatalf("failed to load : %+v", err)
+		return
+	}
+	for _, row := range rows {
+		// add to sync map
+		liveTagsMap.Add(row.LivestreamID, Tag{ID: row.TagID, Name: row.TagName})
+	}
+}
+
+func LoadTagFromDB() {
+	// clear sync map
+	tagMap.Clear()
+
+	var rows []*TagModel
+	if err := dbConn.Select(&rows, `SELECT * FROM tags`); err != nil {
+		log.Fatalf("failed to load : %+v", err)
+		return
+	}
+	for _, row := range rows {
+		// add to sync map
+		tagMap.Add(row.ID, Tag{ID: row.ID, Name: row.Name})
 	}
 }
 
