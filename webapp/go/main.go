@@ -245,10 +245,12 @@ var livestreamMap = NewSyncMap[int64, LivestreamModel]()
 var liveTagsMap = NewSyncListMap[int64, Tag]()
 
 var userTotalReactionsMap = NewSyncCounterMap[int64, int64]()
+var liveTotalReactionsMap = NewSyncCounterMap[int64, int64]()
 
 func LoadCache() {
 	LoadIconFromDB()
-	LoadReactionFromDB()
+	LoadUserReactionFromDB()
+	LoadLiveReactionFromDB()
 	LoadLivestreamFromDB()
 	LoadThemeFromDB()
 	LoadUserFromDB()
@@ -276,7 +278,7 @@ func LoadIconFromDB() {
 	}
 }
 
-func LoadReactionFromDB() {
+func LoadUserReactionFromDB() {
 	userTotalReactionsMap.Clear()
 
 	type Reaction struct {
@@ -293,6 +295,24 @@ func LoadReactionFromDB() {
 	}
 	for _, row := range rows {
 		userTotalReactionsMap.Add(row.UserID, row.Count)
+	}
+}
+
+func LoadLiveReactionFromDB() {
+	liveTotalReactionsMap.Clear()
+
+	type Reaction struct {
+		LivestreamID int64 `db:"livestream_id"`
+		Count        int64 `db:"count"`
+	}
+
+	var rows []*Reaction
+	if err := dbConn.Select(&rows, `SELECT COUNT(*) as count, l.id as livestream_id FROM livestreams l INNER JOIN reactions r ON l.id = r.livestream_id GROUP BY l.id`); err != nil {
+		log.Fatalf("failed to load : %+v", err)
+		return
+	}
+	for _, row := range rows {
+		liveTotalReactionsMap.Add(row.LivestreamID, row.Count)
 	}
 }
 

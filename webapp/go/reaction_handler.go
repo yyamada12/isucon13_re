@@ -141,6 +141,7 @@ func postReactionHandler(c echo.Context) error {
 	livestream := livestreamMap.Get(int64(livestreamID))
 	if livestream != nil {
 		userTotalReactionsMap.Add(livestream.UserID, 1)
+		liveTotalReactionsMap.Add(int64(livestreamID), 1)
 	}
 
 	return c.JSON(http.StatusCreated, reaction)
