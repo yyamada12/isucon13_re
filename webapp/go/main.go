@@ -261,6 +261,7 @@ func LoadCache() {
 	LoadUserReactionFromDB()
 	LoadLiveReactionFromDB()
 	LoadUserTipFromDB()
+	LoadLiveTipsFromDB()
 	LoadLivestreamFromDB()
 	LoadThemeFromDB()
 	LoadUserFromDB()
