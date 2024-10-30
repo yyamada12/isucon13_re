@@ -209,6 +209,7 @@ func (sm *SyncCounterMap[K, V]) Clear() {
 
 var iconUsernameMap = NewSyncMap[string, []byte]()
 var iconUserMap = NewSyncMap[int64, []byte]()
+var themeMap = NewSyncMap[int64, ThemeModel]()
 
 var livestreamMap = NewSyncMap[int64, LivestreamModel]()
 
@@ -217,6 +218,8 @@ var userTotalReactionsMap = NewSyncCounterMap[int64, int64]()
 func LoadCache() {
 	LoadIconFromDB()
 	LoadReactionFromDB()
+	LoadLivestreamFromDB()
+	LoadThemeFromDB()
 }
 
 func LoadIconFromDB() {
@@ -271,6 +274,21 @@ func LoadLivestreamFromDB() {
 	for _, row := range rows {
 		// add to sync map
 		livestreamMap.Add(row.ID, *row)
+	}
+}
+
+func LoadThemeFromDB() {
+	// clear sync map
+	themeMap.Clear()
+
+	var rows []*ThemeModel
+	if err := dbConn.Select(&rows, `SELECT * FROM themes`); err != nil {
+		log.Fatalf("failed to load : %+v", err)
+		return
+	}
+	for _, row := range rows {
+		// add to sync map
+		themeMap.Add(row.UserID, *row)
 	}
 }
 
