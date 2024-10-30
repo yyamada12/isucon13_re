@@ -247,6 +247,7 @@ var liveTagsMap = NewSyncListMap[int64, Tag]()
 var userTotalReactionsMap = NewSyncCounterMap[int64, int64]()
 var liveTotalReactionsMap = NewSyncCounterMap[int64, int64]()
 var userTotalTipsMap = NewSyncCounterMap[int64, int64]()
+var liveTotalTipsMap = NewSyncCounterMap[int64, int64]()
 
 func LoadCache() {
 	LoadIconFromDB()
@@ -335,6 +336,24 @@ func LoadUserTipFromDB() {
 	}
 	for _, row := range rows {
 		userTotalTipsMap.Add(row.UserID, row.Count)
+	}
+}
+
+func LoadLiveTipsFromDB() {
+	liveTotalTipsMap.Clear()
+
+	type Tips struct {
+		LivestreamID int64 `db:"livestream_id"`
+		Count        int64 `db:"count"`
+	}
+
+	var rows []*Tips
+	if err := dbConn.Select(&rows, `SELECT IFNULL(SUM(l2.tip), 0) as count, l.id as livestream_id FROM livestreams l INNER JOIN livecomments l2 ON l.id = l2.livestream_id GROUP BY l.id`); err != nil {
+		log.Fatalf("failed to load : %+v", err)
+		return
+	}
+	for _, row := range rows {
+		liveTotalTipsMap.Add(row.LivestreamID, row.Count)
 	}
 }
 

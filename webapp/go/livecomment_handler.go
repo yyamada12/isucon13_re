@@ -252,6 +252,7 @@ func postLivecommentHandler(c echo.Context) error {
 
 	livestream := livestreamMap.Get(int64(livestreamID))
 	userTotalTipsMap.Add(livestream.UserID, req.Tip)
+	liveTotalTipsMap.Add(int64(livestreamID), req.Tip)
 
 	return c.JSON(http.StatusCreated, livecomment)
 }
