@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"sync"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
@@ -116,6 +117,8 @@ func initializeHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to initialize: "+err.Error())
 	}
 
+	LoadCache()
+
 	go func() {
 		if out, err := exec.Command("go", "tool", "pprof", "-seconds=30", "-proto", "-output", "/home/isucon/pprof/pprof.pb.gz", "localhost:6060/debug/pprof/profile").CombinedOutput(); err != nil {
 			fmt.Printf("pprof failed with err=%s, %s", string(out), err)
@@ -135,6 +138,66 @@ func initializeHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, InitializeResponse{
 		Language: "golang",
 	})
+}
+
+type SyncMap[K comparable, V any] struct {
+	m  map[K]*V
+	mu sync.RWMutex
+}
+
+func NewSyncMap[K comparable, V any]() *SyncMap[K, V] {
+	return &SyncMap[K, V]{m: map[K]*V{}}
+}
+
+func (sm *SyncMap[K, V]) Add(key K, value V) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.m[key] = &value
+}
+
+func (sm *SyncMap[K, V]) Get(key K) *V {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return sm.m[key]
+}
+
+func (sm *SyncMap[K, V]) Delete(key K) {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	delete(sm.m, key)
+}
+
+func (sm *SyncMap[K, V]) Clear() {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.m = map[K]*V{}
+}
+
+var iconUsernameMap = NewSyncMap[string, []byte]()
+var iconUserMap = NewSyncMap[int64, []byte]()
+
+func LoadCache() {
+	LoadIconFromDB()
+}
+
+func LoadIconFromDB() {
+	iconUserMap.Clear()
+	iconUsernameMap.Clear()
+	type Icon struct {
+		UserID   int64  `db:"user_id"`
+		Image    []byte `db:"image"`
+		Username string `db:"username"`
+	}
+
+	var rows []*Icon
+	if err := dbConn.Select(&rows, "SELECT icons.image as image, icons.user_id as user_id, users.name as username FROM icons INNER JOIN users ON icons.user_id = users.id"); err != nil {
+		log.Fatalf("failed to load : %+v", err)
+		return
+	}
+	for _, row := range rows {
+		iconUserMap.Add(row.UserID, row.Image)
+		iconUsernameMap.Add(row.Username, row.Image)
+	}
 }
 
 func main() {
@@ -216,6 +279,8 @@ func main() {
 	}
 	defer conn.Close()
 	dbConn = conn
+
+	LoadCache()
 
 	subdomainAddr, ok := os.LookupEnv(powerDNSSubdomainAddressEnvKey)
 	if !ok {

@@ -86,7 +86,7 @@ type PostIconResponse struct {
 }
 
 func getIconHandler(c echo.Context) error {
-	ctx := c.Request().Context()
+	// ctx := c.Request().Context()
 
 	username := c.Param("username")
 
@@ -104,16 +104,24 @@ func getIconHandler(c echo.Context) error {
 	// 	return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
 	// }
 
-	var image []byte
-	if err := dbConn.GetContext(ctx, &image, " SELECT image FROM icons INNER JOIN users ON icons.user_id = users.id WHERE users.name = ?", username); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return c.File(fallbackImage)
-		} else {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user icon: "+err.Error())
-		}
+	// var image []byte
+
+	cached := iconUsernameMap.Get(username)
+	if cached != nil {
+		return c.Blob(http.StatusOK, "image/jpeg", *cached)
+	} else {
+		return c.File(fallbackImage)
 	}
 
-	return c.Blob(http.StatusOK, "image/jpeg", image)
+	// if err := dbConn.GetContext(ctx, &image, " SELECT image FROM icons INNER JOIN users ON icons.user_id = users.id WHERE users.name = ?", username); err != nil {
+	// 	if errors.Is(err, sql.ErrNoRows) {
+	// 		return c.File(fallbackImage)
+	// 	} else {
+	// 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user icon: "+err.Error())
+	// 	}
+	// }
+
+	// return c.Blob(http.StatusOK, "image/jpeg", image)
 }
 
 func postIconHandler(c echo.Context) error {
@@ -157,6 +165,9 @@ func postIconHandler(c echo.Context) error {
 	if err := tx.Commit(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
 	}
+
+	iconUsernameMap.Add(sess.Values[defaultUsernameKey].(string), req.Image)
+	iconUserMap.Add(userID, req.Image)
 
 	return c.JSON(http.StatusCreated, &PostIconResponse{
 		ID: iconID,
@@ -405,14 +416,20 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 	}
 
 	var image []byte
-	if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			return User{}, err
-		}
+	imageCache := iconUserMap.Get(userModel.ID)
+	if imageCache != nil {
+		image = *imageCache
+	} else {
+		// if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
+		// 	if !errors.Is(err, sql.ErrNoRows) {
+		// 		return User{}, err
+		// 	}
+		var err error
 		image, err = os.ReadFile(fallbackImage)
 		if err != nil {
 			return User{}, err
 		}
+		// }
 	}
 	iconHash := sha256.Sum256(image)
 
