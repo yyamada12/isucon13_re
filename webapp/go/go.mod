@@ -1,6 +1,8 @@
 module github.com/isucon/isucon13/webapp/go
 
-go 1.21
+go 1.22.0
+
+toolchain go1.22.8
 
 require (
 	github.com/felixge/fgprof v0.9.5
@@ -12,6 +14,7 @@ require (
 	github.com/labstack/echo/v4 v4.11.1
 	github.com/labstack/gommon v0.4.0
 	golang.org/x/crypto v0.11.0
+	golang.org/x/exp v0.0.0-20241009180824-f66d83c29e7c
 )
 
 require (

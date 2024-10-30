@@ -167,6 +167,8 @@ func reserveLivestreamHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
 	}
 
+	livestreamMap.Add(livestream.ID, *livestreamModel)
+
 	return c.JSON(http.StatusCreated, livestream)
 }
 

@@ -17,6 +17,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"golang.org/x/exp/constraints"
 
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
@@ -173,11 +174,49 @@ func (sm *SyncMap[K, V]) Clear() {
 	sm.m = map[K]*V{}
 }
 
+type SyncCounterMap[K comparable, V constraints.Integer] struct {
+	m  map[K]V
+	mu sync.RWMutex
+}
+
+func NewSyncCounterMap[K comparable, V constraints.Integer]() *SyncCounterMap[K, V] {
+	return &SyncCounterMap[K, V]{m: map[K]V{}}
+}
+
+func (sm *SyncCounterMap[K, V]) Add(key K, value V) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.m[key] += value
+}
+
+func (sm *SyncCounterMap[K, V]) Get(key K) V {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return sm.m[key]
+}
+
+func (sm *SyncCounterMap[K, V]) Delete(key K) {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	delete(sm.m, key)
+}
+
+func (sm *SyncCounterMap[K, V]) Clear() {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.m = map[K]V{}
+}
+
 var iconUsernameMap = NewSyncMap[string, []byte]()
 var iconUserMap = NewSyncMap[int64, []byte]()
 
+var livestreamMap = NewSyncMap[int64, LivestreamModel]()
+
+var userTotalReactionsMap = NewSyncCounterMap[int64, int64]()
+
 func LoadCache() {
 	LoadIconFromDB()
+	LoadReactionFromDB()
 }
 
 func LoadIconFromDB() {
@@ -197,6 +236,41 @@ func LoadIconFromDB() {
 	for _, row := range rows {
 		iconUserMap.Add(row.UserID, row.Image)
 		iconUsernameMap.Add(row.Username, row.Image)
+	}
+}
+
+func LoadReactionFromDB() {
+	userTotalReactionsMap.Clear()
+
+	type Reaction struct {
+		UserID int64 `db:"user_id"`
+		Count  int64 `db:"count"`
+	}
+
+	var rows []*Reaction
+	if err := dbConn.Select(&rows, `SELECT COUNT(*) as count, u.id as user_id FROM users u
+		INNER JOIN livestreams l ON l.user_id = u.id
+		INNER JOIN reactions r ON r.livestream_id = l.id GROUP BY u.id`); err != nil {
+		log.Fatalf("failed to load : %+v", err)
+		return
+	}
+	for _, row := range rows {
+		userTotalReactionsMap.Add(row.UserID, row.Count)
+	}
+}
+
+func LoadLivestreamFromDB() {
+	// clear sync map
+	livestreamMap.Clear()
+
+	var rows []*LivestreamModel
+	if err := dbConn.Select(&rows, `SELECT * FROM livestreams`); err != nil {
+		log.Fatalf("failed to load : %+v", err)
+		return
+	}
+	for _, row := range rows {
+		// add to sync map
+		livestreamMap.Add(row.ID, *row)
 	}
 }
 

@@ -95,17 +95,18 @@ func getUserStatisticsHandler(c echo.Context) error {
 	var ranking UserRanking
 	for _, user := range users {
 		var reactions int64
-		query := `
-		SELECT COUNT(*) FROM users u
-		INNER JOIN livestreams l ON l.user_id = u.id
-		INNER JOIN reactions r ON r.livestream_id = l.id
-		WHERE u.id = ?`
-		if err := tx.GetContext(ctx, &reactions, query, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to count reactions: "+err.Error())
-		}
+		reactions = userTotalReactionsMap.Get(user.ID)
+		// query := `
+		// SELECT COUNT(*) FROM users u
+		// INNER JOIN livestreams l ON l.user_id = u.id
+		// INNER JOIN reactions r ON r.livestream_id = l.id
+		// WHERE u.id = ?`
+		// if err := tx.GetContext(ctx, &reactions, query, user.ID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		// 	return echo.NewHTTPError(http.StatusInternalServerError, "failed to count reactions: "+err.Error())
+		// }
 
 		var tips int64
-		query = `
+		query := `
 		SELECT IFNULL(SUM(l2.tip), 0) FROM users u
 		INNER JOIN livestreams l ON l.user_id = u.id	
 		INNER JOIN livecomments l2 ON l2.livestream_id = l.id
@@ -133,14 +134,15 @@ func getUserStatisticsHandler(c echo.Context) error {
 
 	// リアクション数
 	var totalReactions int64
-	query := `SELECT COUNT(*) FROM users u 
-    INNER JOIN livestreams l ON l.user_id = u.id 
-    INNER JOIN reactions r ON r.livestream_id = l.id
-    WHERE u.name = ?
-	`
-	if err := tx.GetContext(ctx, &totalReactions, query, username); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count total reactions: "+err.Error())
-	}
+	// query := `SELECT COUNT(*) FROM users u
+	// INNER JOIN livestreams l ON l.user_id = u.id
+	// INNER JOIN reactions r ON r.livestream_id = l.id
+	// WHERE u.name = ?
+	// `
+	// if err := tx.GetContext(ctx, &totalReactions, query, username); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	// 	return echo.NewHTTPError(http.StatusInternalServerError, "failed to count total reactions: "+err.Error())
+	// }
+	totalReactions = userTotalReactionsMap.Get(user.ID)
 
 	// ライブコメント数、チップ合計
 	var totalLivecomments int64
@@ -174,7 +176,7 @@ func getUserStatisticsHandler(c echo.Context) error {
 
 	// お気に入り絵文字
 	var favoriteEmoji string
-	query = `
+	query := `
 	SELECT r.emoji_name
 	FROM users u
 	INNER JOIN livestreams l ON l.user_id = u.id
