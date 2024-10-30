@@ -194,9 +194,14 @@ func getMeHandler(c echo.Context) error {
 	defer tx.Rollback()
 
 	userModel := UserModel{}
-	err = tx.GetContext(ctx, &userModel, "SELECT * FROM users WHERE id = ?", userID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return echo.NewHTTPError(http.StatusNotFound, "not found user that has the userid in session")
+	cachedUser := userMap.Get(userID)
+	if cachedUser != nil {
+		userModel = *cachedUser
+	} else {
+		err = tx.GetContext(ctx, &userModel, "SELECT * FROM users WHERE id = ?", userID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return echo.NewHTTPError(http.StatusNotFound, "not found user that has the userid in session")
+		}
 	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get user: "+err.Error())
@@ -285,6 +290,7 @@ func registerHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
 	}
 
+	userMap.Add(userID, userModel)
 	themeMap.Add(userID, themeModel)
 
 	return c.JSON(http.StatusCreated, user)
