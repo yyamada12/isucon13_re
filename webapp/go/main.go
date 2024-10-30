@@ -4,6 +4,7 @@ package main
 // sqlx的な参考: https://jmoiron.github.io/sqlx/
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"log"
 	"net"
@@ -234,8 +235,13 @@ func (sm *SyncListMap[K, V]) Clear() {
 	sm.m = map[K][]V{}
 }
 
-var iconUsernameMap = NewSyncMap[string, []byte]()
-var iconUserMap = NewSyncMap[int64, []byte]()
+type Icon struct {
+	Image []byte
+	Hash  [32]byte
+}
+
+var iconUsernameMap = NewSyncMap[string, Icon]()
+var iconUserMap = NewSyncMap[int64, Icon]()
 var themeMap = NewSyncMap[int64, ThemeModel]()
 var userMap = NewSyncMap[int64, UserModel]()
 var tagMap = NewSyncMap[int64, Tag]()
@@ -264,20 +270,22 @@ func LoadCache() {
 func LoadIconFromDB() {
 	iconUserMap.Clear()
 	iconUsernameMap.Clear()
-	type Icon struct {
+	type IconWithUser struct {
 		UserID   int64  `db:"user_id"`
 		Image    []byte `db:"image"`
 		Username string `db:"username"`
 	}
 
-	var rows []*Icon
+	var rows []*IconWithUser
 	if err := dbConn.Select(&rows, "SELECT icons.image as image, icons.user_id as user_id, users.name as username FROM icons INNER JOIN users ON icons.user_id = users.id"); err != nil {
 		log.Fatalf("failed to load : %+v", err)
 		return
 	}
 	for _, row := range rows {
-		iconUserMap.Add(row.UserID, row.Image)
-		iconUsernameMap.Add(row.Username, row.Image)
+		hash := sha256.Sum256(row.Image)
+		icon := Icon{Image: row.Image, Hash: hash}
+		iconUserMap.Add(row.UserID, icon)
+		iconUsernameMap.Add(row.Username, icon)
 	}
 }
 

@@ -108,7 +108,7 @@ func getIconHandler(c echo.Context) error {
 
 	cached := iconUsernameMap.Get(username)
 	if cached != nil {
-		return c.Blob(http.StatusOK, "image/jpeg", *cached)
+		return c.Blob(http.StatusOK, "image/jpeg", cached.Image)
 	} else {
 		return c.File(fallbackImage)
 	}
@@ -166,8 +166,10 @@ func postIconHandler(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to commit: "+err.Error())
 	}
 
-	iconUsernameMap.Add(sess.Values[defaultUsernameKey].(string), req.Image)
-	iconUserMap.Add(userID, req.Image)
+	hash := sha256.Sum256(req.Image)
+	icon := Icon{Image: req.Image, Hash: hash}
+	iconUsernameMap.Add(sess.Values[defaultUsernameKey].(string), icon)
+	iconUserMap.Add(userID, icon)
 
 	return c.JSON(http.StatusCreated, &PostIconResponse{
 		ID: iconID,
@@ -434,9 +436,11 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 	}
 
 	var image []byte
+	var iconHash [32]byte
 	imageCache := iconUserMap.Get(userModel.ID)
 	if imageCache != nil {
-		image = *imageCache
+		// image = imageCache.Image
+		iconHash = imageCache.Hash
 	} else {
 		// if err := tx.GetContext(ctx, &image, "SELECT image FROM icons WHERE user_id = ?", userModel.ID); err != nil {
 		// 	if !errors.Is(err, sql.ErrNoRows) {
@@ -448,8 +452,8 @@ func fillUserResponse(ctx context.Context, tx *sqlx.Tx, userModel UserModel) (Us
 			return User{}, err
 		}
 		// }
+		iconHash = sha256.Sum256(image)
 	}
-	iconHash := sha256.Sum256(image)
 
 	user := User{
 		ID:          userModel.ID,
