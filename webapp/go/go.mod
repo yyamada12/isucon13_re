@@ -7,6 +7,7 @@ toolchain go1.22.8
 require (
 	github.com/felixge/fgprof v0.9.5
 	github.com/go-sql-driver/mysql v1.7.1
+	github.com/goccy/go-json v0.10.3
 	github.com/google/uuid v1.3.1
 	github.com/gorilla/sessions v1.2.2
 	github.com/jmoiron/sqlx v1.3.5
